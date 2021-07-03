@@ -11,11 +11,11 @@ class FeatureExtractor(nn.Module):
         # カテゴリ変数のembedding_layer
         self.embedding_layers = nn.ModuleList([nn.Embedding(categories, size) for categories, size in embedding_sizes])
 
-        def forward(category_inputs):
-            h = [embedding_layer(category_inputs[:, i]) for i, embedding_layer in enumerate(self.embedding_layers)]
-            # カテゴリ変数の特徴量ベクトルをconcat
-            h = torch.cat(h, dim=1)  # size = (インスタンス数, embeding_dim*カテゴリ変数の数)
-            return h
+    def forward(self, category_inputs):
+        h = [embedding_layer(category_inputs[:, i]) for i, embedding_layer in enumerate(self.embedding_layers)]
+        # カテゴリ変数の特徴量ベクトルをconcat
+        h = torch.cat(h, dim=1)  # size = (インスタンス数, embeding_dim*カテゴリ変数の数)
+        return h
 
 
 class CtrNetwork(nn.Module):

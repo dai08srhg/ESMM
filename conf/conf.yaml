@@ -1,0 +1,7 @@
+# column name
+columns: 
+  feature_columns: ['feature_1', 'feature_2']
+  click_supervised: 'click_supervised'
+  kpi_supervised: 'kpi_supervised'
+
+embedding_dim: 5
