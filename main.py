@@ -84,9 +84,9 @@ def train(df_train_encoded: pd.DataFrame, device, cfg):
             running_ctr_loss += ctr_loss.item()
             running_ctcvr_loss += ctcvr_loss.item()
 
-        Running_total_loss = running_total_loss / (i+1)
-        Running_ctr_loss = running_ctr_loss / (i+1)
-        Running_ctcvr_loss = running_ctcvr_loss / (i+1)
+        running_total_loss = running_total_loss / (i+1)
+        running_ctr_loss = running_ctr_loss / (i+1)
+        running_ctcvr_loss = running_ctcvr_loss / (i+1)
         print(f'epoch: {epoch+1}, total_loss: {running_total_loss}, ctr_loss: {running_ctr_loss}, ctcvr_loss: {running_ctcvr_loss}')
 
 
