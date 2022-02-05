@@ -1,25 +1,33 @@
 import torch
 import torch.nn as nn
+from typing import List, Tuple
+
 
 class FeatureExtractor(nn.Module):
     """
-    カテゴリ変数をembedding layerでencodeする
-    CTRnetworkとCVRnetworkでパラメータを共有する
+    Embedding layer for encoding categorical variables.
     """
-    def __init__(self, embedding_sizes):
+
+    def __init__(self, embedding_sizes: List[Tuple[int, int]]):
+        """
+        Args:
+            embedding_sizes (List[Tuple[int, int]]): List of (Unique categorical variables + 1, embedding dim)
+        """
         super(FeatureExtractor, self).__init__()
-        # カテゴリ変数のembedding_layer
-        self.embedding_layers = nn.ModuleList([nn.Embedding(categories, size) for categories, size in embedding_sizes])
+        self.embedding_layers = nn.ModuleList(
+            [nn.Embedding(unique_size, embedding_dim) for unique_size, embedding_dim in embedding_sizes])
 
     def forward(self, category_inputs):
+        # Embedding each variable
         h = [embedding_layer(category_inputs[:, i]) for i, embedding_layer in enumerate(self.embedding_layers)]
-        # カテゴリ変数の特徴量ベクトルをconcat
-        h = torch.cat(h, dim=1)  # size = (インスタンス数, embeding_dim*カテゴリ変数の数)
+        # Concat each vector
+        h = torch.cat(h, dim=1)  # size = (minibath, embeding_dim * Number of categorical variables)
         return h
 
 
 class CtrNetwork(nn.Module):
-    """CTR予測を行うnetwork"""
+    """NN for CTR prediction"""
+
     def __init__(self, input_dim):
         super(CtrNetwork, self).__init__()
         self.mlp = nn.Sequential(
@@ -28,14 +36,15 @@ class CtrNetwork(nn.Module):
             nn.Linear(in_features=128, out_features=1),
         )
         self.sigmoid = nn.Sigmoid()
-    
+
     def forward(self, inputs):
         p = self.mlp(inputs)
         return self.sigmoid(p)
 
 
 class CvrNetwork(nn.Module):
-    """CVR予測を行うnetwork"""
+    """NN for CVR prediction"""
+
     def __init__(self, input_dim):
         super(CvrNetwork, self).__init__()
         self.mlp = nn.Sequential(
@@ -44,7 +53,7 @@ class CvrNetwork(nn.Module):
             nn.Linear(in_features=128, out_features=1),
         )
         self.sigmoid = nn.Sigmoid()
-    
+
     def forward(self, inputs):
         p = self.mlp(inputs)
         return self.sigmoid(p)
@@ -52,14 +61,20 @@ class CvrNetwork(nn.Module):
 
 class ESMM(nn.Module):
     """ESMM"""
-    def __init__(self, feature_extractor: FeatureExtractor, ctr_network: CtrNetwork, cvr_network: CvrNetwork):
+
+    def __init__(self, embedding_sizes: List[Tuple[int, int]]):
         super(ESMM, self).__init__()
-        self.feature_extractor = feature_extractor
-        self.ctr_network = ctr_network
-        self.cvr_network = cvr_network
-    
+        self.feature_extractor = FeatureExtractor(embedding_sizes)
+
+        input_dim = 0
+        for _, embedding_dim in embedding_sizes:
+            input_dim += embedding_dim
+        self.ctr_network = CtrNetwork(input_dim)
+        self.cvr_network = CvrNetwork(input_dim)
+
     def forward(self, inputs):
-        h = self.feature_extractor(inputs)  # encode
+        # embedding
+        h = self.feature_extractor(inputs)
         # Predict pCTR
         p_ctr = self.ctr_network(h)
         # Predict pCVR

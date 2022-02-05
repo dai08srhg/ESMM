@@ -2,49 +2,49 @@ from typing import List, Tuple
 import torch
 from torch import nn, optim
 import pandas as pd
-import hydra
 from pathlib import Path
 from category_encoders import OrdinalEncoder
-from model.models import FeatureExtractor, CtrNetwork, CvrNetwork, ESMM
+from model.esmm import ESMM
 from model.dataset import EsmmDataset
 import tqdm
-
 
 WORK_DIR = Path().resolve()
 
 
-def load_data() -> pd.DataFrame: 
+def load_data() -> pd.DataFrame:
     # TODO implement data_load
-    return df_train
-    
-    
-def get_embedding_dims(train_X: pd.DataFrame, embedding_dim) -> Tuple(List((int, int)), int):
-    """Get embedding layer size and concat_feature_vec_dim"""
-    field_dims = list(train_X.max())
-    field_dims = list(map(lambda x: x+1, field_dims))  # 各特徴量の最大値＋１
+    return df
 
+
+def get_embedding_size(df: pd.DataFrame, embedding_dim: int) -> List[Tuple[int, int]]:
+    """
+    Get embedding size
+    Args:
+        df (pd.DataFrame): Train dataset
+        embedding_dim (int): Number of embedded dimensions
+    Returns:
+        List[Tuple[int, int]]: List of (Unique number of categories, embedding_dim)
+    """
+    df_feature = df.drop(columns=['click', 'conversion'])
+
+    # Get embedding layer size
+    max_idxs = list(df_feature.max())
     embedding_sizes = []
-    concat_dim = 0
-    for field_dim in field_dims:
-        embedding_sizes.append((field_dim, embedding_dim))
-        concat_dim += embedding_dim
-    return embedding_sizes, concat_dim
+    for i in max_idxs:
+        embedding_sizes.append((int(i + 1), embedding_dim))
+
+    return embedding_sizes
 
 
-def train(df_train_encoded: pd.DataFrame, device, cfg):
-    category_columns = list(cfg.columns.feature_columns)
-    supervised = [cfg.columns.click_supervised, cfg.columns.kpi_supervised]
-
-    # Split feature label
-    train_X = df_train_encoded[category_columns]
-    train_yz = df_train_encoded[supervised]
+def train(df: pd.DataFrame):
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
 
     # Build model
-    embedding_sizes, concat_dim = get_embedding_dims(train_X, cfg.embedding_dim)
-    feature_extractor = FeatureExtractor(embedding_sizes)
-    ctr_network = CtrNetwork(concat_dim)
-    cvr_network = CvrNetwork(concat_dim)
-    model = ESMM(feature_extractor, ctr_network, cvr_network)
+    embedding_sizes = get_embedding_size(df, 5)
+    model = ESMM(embedding_sizes)
     model = model.to(device)
 
     # Settings
@@ -54,7 +54,7 @@ def train(df_train_encoded: pd.DataFrame, device, cfg):
     epochs = 30
 
     # Build dataloader
-    dataset = EsmmDataset(train_X, train_yz)
+    dataset = EsmmDataset(df)
     train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
     # Start fitting
@@ -63,17 +63,17 @@ def train(df_train_encoded: pd.DataFrame, device, cfg):
         running_total_loss = 0.0
         running_ctr_loss = 0.0
         running_ctcvr_loss = 0.0
-        for i, (inputs, y_labels, z_labels) in tqdm.tqdm(enumerate(train_loader), total=len(train_loader)):
+        for i, (inputs, click, conversion) in tqdm.tqdm(enumerate(train_loader), total=len(train_loader)):
             inputs = inputs.to(device)
-            y_labels = torch.unsqueeze(y_labels.to(device), 1)
-            z_labels = torch.unsqueeze(z_labels.to(device), 1)
+            click = torch.unsqueeze(click.to(device), 1)
+            conversion = torch.unsqueeze(conversion.to(device), 1)
 
             # Initialize gradient
-            optimizer.zero_grad()  
+            optimizer.zero_grad()
             # caluculate losses
             p_ctr, p_ctcvr = model(inputs)
-            ctr_loss = loss_fn(p_ctr, y_labels)
-            ctcvr_loss = loss_fn(p_ctcvr, z_labels)
+            ctr_loss = loss_fn(p_ctr, click)
+            ctcvr_loss = loss_fn(p_ctcvr, conversion)
             total_loss = ctr_loss + ctcvr_loss
             # Backpropagation
             total_loss.backward()
@@ -84,25 +84,25 @@ def train(df_train_encoded: pd.DataFrame, device, cfg):
             running_ctr_loss += ctr_loss.item()
             running_ctcvr_loss += ctcvr_loss.item()
 
-        running_total_loss = running_total_loss / (i+1)
-        running_ctr_loss = running_ctr_loss / (i+1)
-        running_ctcvr_loss = running_ctcvr_loss / (i+1)
-        print(f'epoch: {epoch+1}, total_loss: {running_total_loss}, ctr_loss: {running_ctr_loss}, ctcvr_loss: {running_ctcvr_loss}')
+        running_total_loss = running_total_loss / len(train_loader)
+        running_ctr_loss = running_ctr_loss / len(train_loader)
+        running_ctcvr_loss = running_ctcvr_loss / len(train_loader)
+        print(
+            f'epoch: {epoch+1}, total_loss: {running_total_loss}, ctr_loss: {running_ctr_loss}, ctcvr_loss: {running_ctcvr_loss}'
+        )
 
 
-@hydra.main(config_path=f'{WORK_DIR}/conf/conf.yaml')
-def main(cfg):
+def main():
     # Load data
-    df_train = load_data()
+    df = load_data()
 
     # Encode dataset
-    category_columns = list(cfg.columns.feature_columns)
-    encoder = OrdinalEncoder(cols=category_columns, handle_unknown='impute').fit(df_train)
-    df_train_encoded = encoder.transform(df_train)
+    category_columns = ['feature1', 'feature2', 'feature3']
+    encoder = OrdinalEncoder(cols=category_columns, handle_unknown='impute').fit(df)
+    df = encoder.transform(df)
 
     # Start train
-    device = 'cpu'
-    train(df_train_encoded, device, cfg)
+    train(df)
 
 
 if __name__ == '__main__':
