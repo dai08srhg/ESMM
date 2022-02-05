@@ -1,0 +1,8 @@
+pandas==1.4.0
+numpy==1.22.2
+category-encoders==1.3.0
+tqdm==4.62.3
+-f https://download.pytorch.org/whl/cpu/torch_stable.html
+torch==1.10.2+cpu
+torchvision==0.11.3+cpu
+torchaudio==0.10.2+cpu

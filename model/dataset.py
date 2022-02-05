@@ -8,11 +8,12 @@ class EsmmDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, df: pd.DataFrame):
+        # Drop supervised columns
         df_feature = df.drop(columns=['click', 'conversion'])
 
         self.X = torch.from_numpy(df_feature.values).long()
-        self.click = torch.from_numpy(df['click'].values).float()  # label of click
-        self.conversion = torch.from_numpy(df['conversion'].values).float()  # label of conversion
+        self.click = torch.from_numpy(df['click'].values).float()  # click label
+        self.conversion = torch.from_numpy(df['conversion'].values).float()  # conversion label
 
         self.data_num = len(self.X)
 

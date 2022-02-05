@@ -1,0 +1,13 @@
+# 開発用
+version: '3'
+services:
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: esmm
+    volumes:
+      - './:/workspace'
+    container_name: esmm
+    tty: true
+    working_dir: '/workspace'

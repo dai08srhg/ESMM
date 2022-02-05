@@ -12,13 +12,20 @@ WORK_DIR = Path().resolve()
 
 
 def load_data() -> pd.DataFrame:
-    # TODO implement data_load
+    """
+    Load sample data from local storage.
+
+    Returns:
+        pd.DataFrame: pandas dataframe
+    """
+    df = pd.read_pickle('/workspace/data/sample.pkl')
     return df
 
 
 def get_embedding_size(df: pd.DataFrame, embedding_dim: int) -> List[Tuple[int, int]]:
     """
     Get embedding size
+
     Args:
         df (pd.DataFrame): Train dataset
         embedding_dim (int): Number of embedded dimensions
@@ -36,11 +43,21 @@ def get_embedding_size(df: pd.DataFrame, embedding_dim: int) -> List[Tuple[int, 
     return embedding_sizes
 
 
-def train(df: pd.DataFrame):
+def train(df: pd.DataFrame) -> None:
+    """
+    Train ESMM.
+
+    Args:
+        df (pd.DataFrame): Encoded dataset
+    """
     if torch.cuda.is_available():
         device = 'cuda'
     else:
         device = 'cpu'
+
+    # Build dataset
+    dataset = EsmmDataset(df)
+    train_loader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
 
     # Build model
     embedding_sizes = get_embedding_size(df, 5)
@@ -48,14 +65,9 @@ def train(df: pd.DataFrame):
     model = model.to(device)
 
     # Settings
-    batch_size = 64
     loss_fn = loss_fn = nn.BCELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     epochs = 30
-
-    # Build dataloader
-    dataset = EsmmDataset(df)
-    train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
 
     # Start fitting
     model.train()
@@ -87,16 +99,14 @@ def train(df: pd.DataFrame):
         running_total_loss = running_total_loss / len(train_loader)
         running_ctr_loss = running_ctr_loss / len(train_loader)
         running_ctcvr_loss = running_ctcvr_loss / len(train_loader)
-        print(
-            f'epoch: {epoch+1}, total_loss: {running_total_loss}, ctr_loss: {running_ctr_loss}, ctcvr_loss: {running_ctcvr_loss}'
-        )
+        print(f'epoch: {epoch+1}, train_loss: {running_total_loss}')
 
 
 def main():
     # Load data
     df = load_data()
 
-    # Encode dataset
+    # Encode categorical columns
     category_columns = ['feature1', 'feature2', 'feature3']
     encoder = OrdinalEncoder(cols=category_columns, handle_unknown='impute').fit(df)
     df = encoder.transform(df)
